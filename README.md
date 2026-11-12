@@ -45,6 +45,12 @@ npm start
 npm run remotion:studio
 ```
 
+## Science Shorts renderer
+
+The `ScienceStick` composition renders storyboard-led science visuals rather than a fixed stick-figure scene. Each scene can provide `visual`, `visual_elements`, `camera`, and `motion`; known subjects (for example cells, brains, DNA, waves, molecules, planets, and clocks) are illustrated as layered vector artwork. Scene visuals cross-dissolve over 14 frames, while voiceover and sound effects remain aligned to the original scene boundaries.
+
+Existing n8n payloads remain compatible: `icons`, `bg`, `pose`, and `voiceUrl` are still accepted, and unsupported visual labels fall back to a general science illustration.
+
 **Render the example video locally**
 
 ```

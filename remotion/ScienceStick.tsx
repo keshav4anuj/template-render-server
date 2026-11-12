@@ -5,7 +5,6 @@ import {
   Sequence,
   Series,
   interpolate,
-  random,
   spring,
   useCurrentFrame,
   useVideoConfig,
@@ -80,6 +79,15 @@ export type SceneProps = {
   voiceUrl: string;
   sfx?: SfxName;
   durationInFrames?: number;
+  scene?: number;
+  visual?: string;
+  camera?: string;
+  character_action?: string;
+  motion?: string;
+  visual_elements?: string[];
+  transition_in?: string;
+  transition_out?: string;
+  highlight?: string;
 };
 
 export type ScienceStickProps = {
@@ -112,81 +120,6 @@ export const calculateScienceMetadata: CalculateMetadataFunction<
     height: 1920,
     props: {...props, scenes},
   };
-};
-
-/* ------------------------------------------------------------------ */
-/* STICK FIGURE                                                        */
-/* ------------------------------------------------------------------ */
-const POSES: Record<
-  Pose,
-  {la: number; ra: number; ll: number; rl: number; mouth: 'smile' | 'o' | 'flat'; tilt: number}
-> = {
-  idle: {la: 25, ra: -25, ll: 10, rl: -10, mouth: 'smile', tilt: 0},
-  shocked: {la: 155, ra: -155, ll: 14, rl: -14, mouth: 'o', tilt: 0},
-  thinking: {la: 25, ra: -150, ll: 8, rl: -8, mouth: 'flat', tilt: -6},
-  pointing: {la: 95, ra: -20, ll: 10, rl: -10, mouth: 'smile', tilt: 0},
-  walking: {la: 30, ra: -30, ll: 20, rl: -20, mouth: 'smile', tilt: 0},
-  floating: {la: 60, ra: -60, ll: 25, rl: -25, mouth: 'smile', tilt: 4},
-  celebrate: {la: 160, ra: -160, ll: 18, rl: -18, mouth: 'smile', tilt: 0},
-};
-
-const rad = (d: number) => (d * Math.PI) / 180;
-const limb = (x: number, y: number, deg: number, len: number) =>
-  [x + Math.sin(rad(deg)) * len, y + Math.cos(rad(deg)) * len] as const;
-
-const StickFigure: React.FC<{pose: Pose}> = ({pose}) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const p = POSES[pose] ?? POSES.idle;
-
-  const enter = spring({frame, fps, config: {damping: 11, stiffness: 120}});
-  const wob = Math.sin(frame / 7) * 8;
-  const swing = pose === 'walking' ? Math.sin(frame / 5) * 32 : 0;
-  const bobAmp = pose === 'floating' ? 22 : 6;
-  let bob = Math.sin(frame / 10) * bobAmp;
-  if (pose === 'celebrate') bob = -Math.abs(Math.sin(frame / 6)) * 40;
-
-  const shoulder = [300, 240] as const;
-  const hip = [300, 430] as const;
-  const la = limb(shoulder[0], shoulder[1], p.la + wob + swing * -0.8, 150);
-  const ra = limb(shoulder[0], shoulder[1], p.ra - wob + swing * 0.8, 150);
-  const ll = limb(hip[0], hip[1], p.ll + swing, 190);
-  const rl = limb(hip[0], hip[1], p.rl - swing, 190);
-
-  const blink = frame % 90 > 86;
-  const eyeR = p.mouth === 'o' ? 12 : 8;
-
-  return (
-    <svg
-      width={620}
-      height={720}
-      viewBox="0 0 600 700"
-      style={{
-        transform: `translateY(${bob + (1 - enter) * 300}px) scale(${0.6 + 0.4 * enter})`,
-        filter: 'drop-shadow(0 10px 0 rgba(0,0,0,0.35))',
-        overflow: 'visible',
-      }}
-      fill="none"
-      stroke={theme.stroke}
-      strokeWidth={16}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <g transform={`rotate(${p.tilt} 300 190)`}>
-        <circle cx={300} cy={120} r={72} />
-        {!blink && <circle cx={272} cy={108} r={eyeR} fill={theme.stroke} stroke="none" />}
-        {!blink && <circle cx={328} cy={108} r={eyeR} fill={theme.stroke} stroke="none" />}
-        {p.mouth === 'smile' && <path d="M268 146 Q300 176 332 146" strokeWidth={10} />}
-        {p.mouth === 'o' && <ellipse cx={300} cy={152} rx={13} ry={18} strokeWidth={9} />}
-        {p.mouth === 'flat' && <line x1={274} y1={152} x2={326} y2={152} strokeWidth={10} />}
-      </g>
-      <line x1={300} y1={192} x2={hip[0]} y2={hip[1]} />
-      <line x1={shoulder[0]} y1={shoulder[1]} x2={la[0]} y2={la[1]} />
-      <line x1={shoulder[0]} y1={shoulder[1]} x2={ra[0]} y2={ra[1]} />
-      <line x1={hip[0]} y1={hip[1]} x2={ll[0]} y2={ll[1]} />
-      <line x1={hip[0]} y1={hip[1]} x2={rl[0]} y2={rl[1]} />
-    </svg>
-  );
 };
 
 /* ------------------------------------------------------------------ */
@@ -332,18 +265,22 @@ const Subtitles: React.FC<{text: string; durationInFrames: number}> = ({text, du
   const idx = p >= 1 ? words.length - 1 : active;
   const chunk = Math.floor(idx / 3);
   const visible = timings.slice(chunk * 3, chunk * 3 + 3);
+  const subtitleCharacters = visible.reduce((count, word) => count + word.w.length, 0);
+  const subtitleFontSize = Math.min(80, 980 / (subtitleCharacters * 0.62 + visible.length * 0.4));
 
   return (
     <div
       style={{
         position: 'absolute',
-        top: 1420,
+        top: 1460,
         left: 40,
         right: 40,
         textAlign: 'center',
-        fontFamily: theme.font,
-        fontSize: 92,
+        fontFamily: 'Arial, Helvetica, sans-serif',
+        fontSize: subtitleFontSize,
+        fontWeight: 800,
         lineHeight: 1.15,
+        letterSpacing: -1,
         textTransform: 'uppercase',
       }}
     >
@@ -354,11 +291,10 @@ const Subtitles: React.FC<{text: string; durationInFrames: number}> = ({text, du
             key={chunk * 3 + i}
             style={{
               display: 'inline-block',
-              margin: '0 12px',
+              margin: '0 8px',
               color: isActive ? theme.accent : '#fff',
-              transform: `scale(${isActive ? 1.1 : 1})`,
-              WebkitTextStroke: '10px #000',
-              paintOrder: 'stroke fill',
+              transform: `scale(${isActive ? 1.04 : 1})`,
+              textShadow: '0 3px 16px rgba(0,0,0,0.65)',
             }}
           >
             {t.w}
@@ -372,101 +308,396 @@ const Subtitles: React.FC<{text: string; durationInFrames: number}> = ({text, du
 /* ------------------------------------------------------------------ */
 /* SCENE                                                               */
 /* ------------------------------------------------------------------ */
-const ICON_X: Record<number, number[]> = {1: [540], 2: [330, 750], 3: [200, 540, 880]};
+type VisualKind = IconName | 'brain' | 'cell' | 'dna' | 'molecule' | 'wave' | 'particle';
 
-const Scene: React.FC<SceneProps & {durationInFrames: number}> = (p) => {
-  const frame = useCurrentFrame();
-  const {fps} = useVideoConfig();
-  const [c1, c2] = theme.bgs[p.bg] ?? theme.bgs.space;
-  const fade = Math.min(
-    interpolate(frame, [0, 5], [0, 1], {extrapolateRight: 'clamp'}),
-    interpolate(frame, [p.durationInFrames - 5, p.durationInFrames], [1, 0], {extrapolateLeft: 'clamp'}),
-  );
-  const hs = spring({frame, fps, config: {damping: 12}});
-  const xs = ICON_X[Math.min(3, Math.max(1, p.icons.length))] ?? [540];
+const isIconName = (name: string): name is IconName =>
+  [
+    'earth',
+    'moon',
+    'sun',
+    'rocket',
+    'ufo',
+    'alien',
+    'clock',
+    'blackhole',
+    'star',
+    'atom',
+    'planet',
+    'lightbulb',
+  ].includes(name);
+
+const visualKindFor = (text: string): VisualKind | undefined => {
+  const value = text.toLowerCase();
+  if (/brain|neuron|synapse|nerve/.test(value)) return 'brain';
+  if (/cell|organ|membrane|bacter|microbe/.test(value)) return 'cell';
+  if (/dna|gene|chromosome|double helix/.test(value)) return 'dna';
+  if (/molecule|chemical|protein|receptor/.test(value)) return 'molecule';
+  if (/wave|sound|light|signal|frequency/.test(value)) return 'wave';
+  if (/particle|electron|proton|neutron|atom|quantum/.test(value)) return 'particle';
+  if (/black.?hole|singularity/.test(value)) return 'blackhole';
+  if (/earth|globe|world/.test(value)) return 'earth';
+  if (/moon|lunar/.test(value)) return 'moon';
+  if (/sun|solar|star/.test(value)) return 'sun';
+  if (/planet|mars|jupiter|saturn/.test(value)) return 'planet';
+  if (/rocket|ship|spacecraft/.test(value)) return 'rocket';
+  if (/clock|time|hour|second/.test(value)) return 'clock';
+  if (/alien|ufo/.test(value)) return 'ufo';
+  if (/lightbulb|idea/.test(value)) return 'lightbulb';
+  return undefined;
+};
+
+const VisualMark: React.FC<{kind: VisualKind; frame: number}> = ({kind, frame}) => {
+  if (
+    kind === 'earth' ||
+    kind === 'moon' ||
+    kind === 'sun' ||
+    kind === 'rocket' ||
+    kind === 'ufo' ||
+    kind === 'alien' ||
+    kind === 'clock' ||
+    kind === 'blackhole' ||
+    kind === 'star' ||
+    kind === 'atom' ||
+    kind === 'planet' ||
+    kind === 'lightbulb'
+  ) {
+    return <Icon name={kind} frame={frame} />;
+  }
+
+  if (kind === 'brain') {
+    return (
+      <g stroke="#fff1df" strokeWidth={3} strokeLinejoin="round">
+        <path
+          d="M50 14C38 4 25 14 27 27 11 27 12 47 21 51 9 63 22 81 34 78 39 92 50 86 50 77 50 86 63 92 68 78 82 81 93 63 79 51 89 47 89 27 73 27 75 14 62 4 50 14Z"
+          fill="#ef806f"
+        />
+        <path d="M50 16V77M29 30Q42 29 42 43M22 54Q40 49 42 62M71 30Q58 29 58 43M78 54Q60 49 58 62" fill="none" />
+        <circle cx={34} cy={36} r={3} fill="#ffe18b" stroke="none" />
+        <circle cx={67} cy={56} r={3} fill="#ffe18b" stroke="none" />
+      </g>
+    );
+  }
+
+  if (kind === 'cell') {
+    return (
+      <g stroke="#e9fff0" strokeWidth={3}>
+        <path d="M15 42C16 20 39 11 58 17 81 19 91 39 82 60 76 81 53 89 33 79 16 72 9 58 15 42Z" fill="#42b890" />
+        <circle cx={54} cy={49} r={17} fill="#285a78" />
+        <circle cx={58} cy={46} r={5} fill="#a5d9ff" stroke="none" />
+        <ellipse cx={30} cy={45} rx={8} ry={4} fill="#f3cf69" transform="rotate(-25 30 45)" />
+        <ellipse cx={70} cy={67} rx={8} ry={4} fill="#f3cf69" transform="rotate(25 70 67)" />
+        <circle cx={31} cy={63} r={3} fill="#fff" stroke="none" />
+      </g>
+    );
+  }
+
+  if (kind === 'dna') {
+    const points = Array.from({length: 7}, (_, i) => {
+      const y = 12 + i * 13;
+      const x1 = 50 + Math.sin((i + frame / 12) * 0.8) * 26;
+      return {y, x1, x2: 100 - x1};
+    });
+    return (
+      <g fill="none" strokeLinecap="round">
+        <polyline points={points.map((point) => `${point.x1},${point.y}`).join(' ')} stroke="#69d9d0" strokeWidth={7} />
+        <polyline points={points.map((point) => `${point.x2},${point.y}`).join(' ')} stroke="#ffc46b" strokeWidth={7} />
+        {points.map((point, i) => (
+          <line key={i} x1={point.x1} y1={point.y} x2={point.x2} y2={point.y} stroke="#fff" strokeWidth={2} opacity={0.8} />
+        ))}
+      </g>
+    );
+  }
+
+  if (kind === 'molecule') {
+    return (
+      <g stroke="#fff" strokeWidth={4}>
+        <path d="M26 30L50 50 75 28M50 50L34 76 72 72" fill="none" stroke="#b8d5ff" strokeWidth={5} />
+        <circle cx={26} cy={30} r={12} fill="#ff806f" />
+        <circle cx={50} cy={50} r={15} fill="#81d4ff" />
+        <circle cx={75} cy={28} r={10} fill="#f5d477" />
+        <circle cx={34} cy={76} r={10} fill="#bd9bff" />
+        <circle cx={72} cy={72} r={12} fill="#76dfbc" />
+      </g>
+    );
+  }
+
+  if (kind === 'wave') {
+    return (
+      <g fill="none" strokeLinecap="round">
+        <path d="M8 50C19 50 19 23 30 23S41 77 52 77 63 23 74 23 85 50 96 50" stroke="#65d9ee" strokeWidth={8} />
+        <path d="M8 50H96" stroke="#fff" strokeWidth={2} strokeDasharray="4 9" opacity={0.55} />
+        <circle cx={52} cy={77} r={5} fill="#ffd47e" stroke="none" />
+      </g>
+    );
+  }
 
   return (
-    <AbsoluteFill style={{opacity: fade, background: `linear-gradient(180deg, ${c1}, ${c2})`}}>
-      <svg width={1080} height={1920} style={{position: 'absolute'}}>
-        {Array.from({length: 50}).map((_, i) => (
-          <circle
-            key={i}
-            cx={random('x' + i) * 1080}
-            cy={random('y' + i) * 1920}
-            r={2 + random('r' + i) * 4}
-            fill="#fff"
-            opacity={0.35 + 0.65 * Math.abs(Math.sin((frame + i * 13) / 22))}
-          />
-        ))}
-      </svg>
+    <g>
+      <circle cx={50} cy={50} r={39} fill="#596bc5" stroke="#fff" strokeWidth={3} />
+      <circle cx={50} cy={50} r={25} fill="none" stroke="#b9c9ff" strokeWidth={2} opacity={0.8} />
+      <circle cx={50} cy={50} r={10} fill="#ffcf70" />
+      <circle cx={50} cy={50} r={4} fill="#fff" />
+    </g>
+  );
+};
 
+const getVisualKinds = (scene: SceneProps): {kind: VisualKind; label: string}[] => {
+  const elements = Array.isArray(scene.visual_elements)
+    ? scene.visual_elements.filter((element): element is string => typeof element === 'string')
+    : [];
+  const candidates = [...elements, scene.visual ?? '', ...(Array.isArray(scene.icons) ? scene.icons : [])];
+  const seen = new Set<VisualKind>();
+  const result: {kind: VisualKind; label: string}[] = [];
+
+  for (const candidate of candidates) {
+    const kind = visualKindFor(candidate) ?? (isIconName(candidate) ? candidate : undefined);
+    if (!kind || seen.has(kind)) continue;
+    seen.add(kind);
+    result.push({kind, label: candidate.trim().slice(0, 24)});
+    if (result.length === 3) break;
+  }
+
+  if (result.length === 0) {
+    result.push({kind: 'molecule', label: scene.headline || 'SCIENCE'});
+  }
+  return result;
+};
+
+const SceneVisual: React.FC<{
+  scene: SceneProps;
+  frame: number;
+  headlineOpacity?: number;
+  showHeadline?: boolean;
+}> = ({scene, frame, headlineOpacity = 1, showHeadline = true}) => {
+  const {fps} = useVideoConfig();
+  const [colorA, colorB] = theme.bgs[scene.bg] ?? theme.bgs.deepblue;
+  const objects = getVisualKinds(scene);
+  const intro = spring({frame, fps, config: {damping: 24, stiffness: 70}});
+  const camera = (scene.camera ?? '').toLowerCase();
+  const motion = (scene.motion ?? '').toLowerCase();
+  const pushIn = /push|zoom|dolly|close.?up/.test(camera);
+  const panLeft = /pan left|move left/.test(camera);
+  const panRight = /pan right|move right/.test(camera);
+  const energeticMotion = /orbit|spin|rotate|accelerat|spiral/.test(motion);
+  const progress = Math.min(1, frame / (fps * 4));
+  const scale = 1.015 + (pushIn ? progress * 0.07 : progress * 0.025);
+  const pan = panLeft ? progress * 24 : panRight ? progress * -24 : 0;
+  const positions =
+    objects.length === 1
+      ? [{x: 540, y: 545, size: 470}]
+      : objects.length === 2
+        ? [
+            {x: 340, y: 520, size: 330},
+            {x: 740, y: 605, size: 330},
+          ]
+        : [
+            {x: 540, y: 525, size: 390},
+            {x: 260, y: 370, size: 210},
+            {x: 820, y: 700, size: 210},
+          ];
+
+  return (
+    <AbsoluteFill
+      style={{
+        overflow: 'hidden',
+        background: `radial-gradient(ellipse at 50% 42%, ${colorB} 0%, ${colorA} 68%, #07101f 100%)`,
+      }}
+    >
       <div
         style={{
           position: 'absolute',
-          top: 170,
-          width: '100%',
-          padding: '0 60px',
-          boxSizing: 'border-box',
-          textAlign: 'center',
-          fontFamily: theme.font,
-          fontSize: 104,
-          lineHeight: 1.05,
-          color: theme.accent,
-          textShadow: '0 8px 0 #000',
-          transform: `scale(${hs})`,
+          inset: -50,
+          opacity: 0.32,
+          backgroundImage:
+            'radial-gradient(circle at center, rgba(255,255,255,0.35) 1px, transparent 1.5px)',
+          backgroundSize: '38px 38px',
+          transform: `translateX(${pan}px) scale(${scale})`,
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          background:
+            'linear-gradient(145deg, rgba(255,255,255,0.08), transparent 38%, rgba(3,7,18,0.25))',
+        }}
+      />
+      {showHeadline ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 132,
+            left: 50,
+            right: 50,
+            textAlign: 'center',
+            fontFamily: 'Arial, Helvetica, sans-serif',
+            fontSize: 90,
+            fontWeight: 800,
+            lineHeight: 1.02,
+            letterSpacing: -3,
+            color: '#fff8e9',
+            textShadow: '0 5px 30px rgba(0,0,0,0.3)',
+            transform: `translateY(${(1 - intro) * 26}px)`,
+            opacity: intro * headlineOpacity,
+          }}
+        >
+          {scene.headline}
+        </div>
+      ) : null}
+      <svg
+        width={1080}
+        height={1120}
+        viewBox="0 0 1080 1120"
+        style={{
+          position: 'absolute',
+          top: 295,
+          left: 0,
+          transform: `translateX(${pan}px) scale(${scale})`,
+          transformOrigin: '50% 45%',
         }}
       >
-        {p.headline}
-      </div>
-
-      {p.icons.map((name, i) => {
-        const s = spring({frame: frame - 6 - i * 8, fps, config: {damping: 9}});
-        return (
-          <svg
-            key={name + i}
-            width={280}
-            height={280}
-            viewBox="0 0 100 100"
-            style={{
-              position: 'absolute',
-              left: xs[i] - 140,
-              top: 500,
-              transform: `translateY(${Math.sin((frame + i * 10) / 15) * 14}px) scale(${s})`,
-              filter: 'drop-shadow(0 8px 0 rgba(0,0,0,0.35))',
-            }}
-          >
-            <Icon name={name} frame={frame} />
-          </svg>
-        );
-      })}
-
-      <div style={{position: 'absolute', top: 820, left: 230}}>
-        <StickFigure pose={p.pose} />
-      </div>
-
-      <Subtitles text={p.narration} durationInFrames={p.durationInFrames} />
-
-      {p.voiceUrl ? (
-        <Sequence from={4}>
-          <Audio src={p.voiceUrl} volume={1} />
-        </Sequence>
-      ) : null}
-      {p.sfx ? <Audio src={staticFile(`audio/sfx_${p.sfx}.wav`)} volume={0.5} /> : null}
+        <defs>
+          <radialGradient id={`halo-${scene.scene ?? 0}`}>
+            <stop offset="0%" stopColor="#fff" stopOpacity={0.16} />
+            <stop offset="68%" stopColor="#9cc8ff" stopOpacity={0.05} />
+            <stop offset="100%" stopColor="#9cc8ff" stopOpacity={0} />
+          </radialGradient>
+        </defs>
+        <ellipse cx={540} cy={540} rx={470} ry={440} fill={`url(#halo-${scene.scene ?? 0})`} />
+        <ellipse
+          cx={540}
+          cy={545}
+          rx={335 + Math.sin(frame / 50) * 8}
+          ry={250}
+          fill="none"
+          stroke="rgba(210,230,255,0.18)"
+          strokeWidth={2}
+          transform={`rotate(${energeticMotion ? frame * 0.12 - 18 : -18} 540 545)`}
+        />
+        <ellipse
+          cx={540}
+          cy={545}
+          rx={420}
+          ry={310}
+          fill="none"
+          stroke="rgba(210,230,255,0.1)"
+          strokeWidth={2}
+          strokeDasharray="3 14"
+          transform={`rotate(24 540 545)`}
+        />
+        {objects.length > 1 ? (
+          <path
+            d={objects.length === 2 ? 'M390 550 Q540 430 690 590' : 'M360 450 Q540 340 720 630'}
+            fill="none"
+            stroke="rgba(255,232,174,0.65)"
+            strokeWidth={3}
+            strokeDasharray="5 13"
+          />
+        ) : null}
+        {objects.map(({kind, label}, index) => {
+          const point = positions[index];
+          const bob = Math.sin((frame + index * 13) / 24) * (index === 0 ? 9 : 14);
+          const entrance = spring({frame: frame - index * 7, fps, config: {damping: 20, stiffness: 75}});
+          return (
+            <g
+              key={`${kind}-${index}`}
+              transform={`translate(${point.x - point.size / 2} ${point.y - point.size / 2 + bob}) scale(${(point.size / 100) * entrance})`}
+              opacity={entrance}
+            >
+              <circle cx={50} cy={50} r={54} fill="rgba(255,255,255,0.08)" />
+              <circle cx={50} cy={50} r={47} fill="rgba(5,12,30,0.26)" />
+              <VisualMark kind={kind} frame={frame} />
+              <text
+                x={50}
+                y={117}
+                textAnchor="middle"
+                fill="rgba(255,255,255,0.78)"
+                fontSize={5}
+                fontFamily="Arial, Helvetica, sans-serif"
+                letterSpacing={0.9}
+              >
+                {label.toUpperCase()}
+              </text>
+            </g>
+          );
+        })}
+        <circle cx={170 + Math.sin(frame / 35) * 35} cy={270} r={5} fill="#ffe09a" />
+        <circle cx={895} cy={370 + Math.cos(frame / 40) * 30} r={4} fill="#b5ecff" />
+        <circle cx={660} cy={895 + Math.sin(frame / 32) * 18} r={4} fill="#ffb5a8" />
+      </svg>
     </AbsoluteFill>
   );
 };
+
+const Scene: React.FC<
+  SceneProps & {durationInFrames: number; nextScene?: SceneProps}
+> = (p) => {
+  const frame = useCurrentFrame();
+  const transitionFrames = 14;
+  const transitionProgress =
+    p.nextScene && frame >= p.durationInFrames - transitionFrames
+      ? Math.min(1, (frame - p.durationInFrames + transitionFrames) / transitionFrames)
+      : 0;
+  const smoothProgress = transitionProgress * transitionProgress * (3 - 2 * transitionProgress);
+
+  return (
+    <AbsoluteFill>
+      <SceneVisual scene={p} frame={frame} headlineOpacity={1 - smoothProgress} />
+      {p.nextScene && transitionProgress > 0 ? (
+        <AbsoluteFill style={{opacity: smoothProgress}}>
+          <SceneVisual
+            scene={p.nextScene}
+            frame={frame - p.durationInFrames + transitionFrames}
+            showHeadline={false}
+          />
+        </AbsoluteFill>
+      ) : null}
+      <Subtitles text={p.narration} durationInFrames={p.durationInFrames} />
+    </AbsoluteFill>
+  );
+};
+
+const SceneAudio: React.FC<SceneProps> = ({voiceUrl, sfx}) => (
+  <>
+    {voiceUrl ? (
+      <Sequence from={4}>
+        <Audio src={voiceUrl} volume={1} />
+      </Sequence>
+    ) : null}
+    {sfx ? <Audio src={staticFile(`audio/sfx_${sfx}.wav`)} volume={0.5} /> : null}
+  </>
+);
 
 /* ------------------------------------------------------------------ */
 /* ROOT COMPOSITION                                                    */
 /* ------------------------------------------------------------------ */
 export const ScienceStick: React.FC<ScienceStickProps> = ({scenes, music}) => {
   const {durationInFrames, fps} = useVideoConfig();
+  const musicFadeInFrames = Math.min(fps, durationInFrames / 3);
+  const musicFadeOutStart = Math.max(
+    musicFadeInFrames,
+    durationInFrames - Math.min(fps * 2, durationInFrames / 3),
+  );
   return (
     <AbsoluteFill style={{backgroundColor: '#000'}}>
       <Series>
         {scenes.map((s, i) => (
           <Series.Sequence key={i} durationInFrames={s.durationInFrames ?? 90}>
-            <Scene {...s} durationInFrames={s.durationInFrames ?? 90} />
+            <Scene
+              {...s}
+              durationInFrames={s.durationInFrames ?? 90}
+              nextScene={scenes[i + 1]}
+            />
+          </Series.Sequence>
+        ))}
+      </Series>
+      <Series>
+        {scenes.map((scene, i) => (
+          <Series.Sequence
+            key={`audio-${i}`}
+            durationInFrames={scene.durationInFrames ?? 90}
+          >
+            <SceneAudio {...scene} />
           </Series.Sequence>
         ))}
       </Series>
@@ -475,10 +706,15 @@ export const ScienceStick: React.FC<ScienceStickProps> = ({scenes, music}) => {
           src={staticFile(`audio/music_${music}.wav`)}
           loop
           volume={(f) =>
-            interpolate(f, [0, fps, durationInFrames - fps * 2, durationInFrames], [0, 0.14, 0.14, 0], {
+            interpolate(
+              f,
+              [0, musicFadeInFrames, musicFadeOutStart, durationInFrames],
+              [0, 0.14, 0.14, 0],
+              {
               extrapolateLeft: 'clamp',
               extrapolateRight: 'clamp',
-            })
+              },
+            )
           }
         />
       ) : null}
